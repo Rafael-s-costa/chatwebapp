@@ -11,61 +11,37 @@ import org.eclipse.jetty.websocket.api.annotations.OnWebSocketConnect;
 import org.eclipse.jetty.websocket.api.annotations.OnWebSocketError;
 import org.eclipse.jetty.websocket.api.annotations.OnWebSocketMessage;
 import org.eclipse.jetty.websocket.api.annotations.WebSocket;
+import org.json.JSONObject;
 
 import sparktest.chatwebapp.pojo.MessageDTO;
+import sparktest.chatwebapp.webapp.App;
 
 @WebSocket
 public class ChatEndpoint {
 
     private Session session;
-    private static Set<ChatEndpoint> chatEndpoints
-            = new CopyOnWriteArraySet<>();
-    private static HashMap<String, String> users = new HashMap<>();
+    private String sender, msg;
 
     @OnWebSocketConnect
-    public void onConnect(Session username) throws Exception {
-        this.session = session;
-        chatEndpoints.add(this);
-        users.put(session.getId(), username);
-
-        MessageDTO message = new MessageDTO();
-        message.setFrom(username);
-        message.setContent("Connected!");
-        broadcast(message);
+    public void onConnect(Session user) throws Exception {
+    	String username = "User" + App.nextUserNumber++;
+    	App.userUsernameMap.put(user, username);
+    	App.broadcastMessage(sender = "Server", msg = (username + " joined the chat"));
     }
 
     @OnWebSocketMessage
-    public void onMessage(Session session, MessageDTO message) throws IOException {
-        message.setFrom(users.get(session.getId()));
-        broadcast(message);
+    public void onMessage(Session user, String message) throws IOException {
+    	App.broadcastMessage(sender = App.userUsernameMap.get(user), msg = message);
     }
 
     @OnWebSocketClose
-    public void onClose(Session session) throws IOException {
-
-        chatEndpoints.remove(this);
-        MessageDTO message = new MessageDTO();
-        message.setFrom(users.get(session.getId()));
-        message.setContent("Disconected!");
-        broadcast(message);
+    public void onClose(Session user, int statusCode, String reason) throws IOException {
+    	String username = App.userUsernameMap.get(user);
+    	App.userUsernameMap.remove(user);
     }
 
     @OnWebSocketError
     public void onError(Session session, Throwable throwable) {
         // Do error handling here
-    }
-
-    public static void broadcast(MessageDTO message)
-        throws IOException {
-
-            chatEndpoints.forEach(endpoint -> {
-                synchronized (endpoint) {
-                    try {
-                        endpoint.session.getRemote().sendObject(message);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            });
     }
 }
